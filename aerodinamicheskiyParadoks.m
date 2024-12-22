@@ -1,4 +1,4 @@
-classdef aerodinamicheskiyParadoks < handle                                
+classdef AerodynamicParadox < handle                                
                                                                            
 % Данный класс относится к моделированию т.н. "аэродинамического парадокса 
 % спутника" — попадая в верхние слои атмосферы, космический аппарат, 
@@ -10,43 +10,44 @@ classdef aerodinamicheskiyParadoks < handle
     properties 
         
         % Мировые константы                                                
-        GM = 6.67.*10.^(-11).*6.*10.^24;
-        Rearth = 6400000;
+        GM = 6.67.*10.^(-11).*6.*10.^24;   % Гравитационная постоянная
+        Rearth = 6400000;   % Радиус Земли
 
         % Параметры спутника                                               
-        SfM = 1; % отн.ед.
-        Hic = 500000; % м
-        Fic = 0; % рад
-        dFdtic  % рад/сек
+        SfM = 1; % отн.ед., Площадь миделя
+        Hic = 500000; % м, Исходное расстояние от поверхности земли до спутника 
+        Fic = 0; % рад, Полярный угол положения спутника в начале отсчета
+        dFdtic  % рад/сек, Изменение полярного угла
 
         % Параметры окружающей среды                                       
-        Cx = 2; 
-        rho0 = 5.*10.^(-8); % кг/м3
-        H = 40000;
+        Cx = 2;    % Коэффициент лобового сопротивления
+        rho0 = 5.*10.^(-8); % кг/м3, Плотность атмосферы для соответствующей высоты Hic
+        H = 40000;   % Высота однородной атмосферы
 
         % Константы задачи
-        tau = 0.1;
+        tau = 0.1;   % Шаг по сетке времени
 
     end
     
     methods
-        function obj = aerodinamicheskiyParadoks(name, value)              
+        function obj = AerodynamicParadox(name, value)              
                                                                            
             % Конструктор
             arguments (Repeating)                                          
-                name
-                value
+                name {mustBeNoempty, mustBeText}
+                value {mustBeNoempty, mustBeNumeric}
             end
 
-            obj.dFdtic = sqrt(obj.GM./(obj.Hic + obj.Rearth).^3);          
+            obj.dFdtic = sqrt(obj.GM. / (obj.Hic + obj.Rearth).^3);          
             
-            for i = 1:numel(value)                                         
-                obj.(name{i}) = value{i};
+            for idx = 1:numel(value)                                         
+                obj.(name{idx}) = value{idx};
             end
+        clearvars
         end
-        
+                            
         function [figureHandle] = plot_velocity_and_trajectory(obj)        
-            % Рисунок
+            % Создание графиков для вычисления скорости и траектории движения спутника по орбите
 
             [radius, angle, radiisTimeDerivative, anglesTimeDerivative] = obj.solve_diff_equation(10); 
             
@@ -56,28 +57,29 @@ classdef aerodinamicheskiyParadoks < handle
             ax1 = nexttile;                                                
             ax2 = nexttile;                                                
             
-                                                                           
-            h1 = plot(ax1, sqrt(anglesTimeDerivative.^2.*radius.^2 ...     
+            % Создание графика для вычисления скорости через изменения угла и радиуса по времени                                                              
+            h1 = plot(ax1, sqrt(anglesTimeDerivative.^2 .*radius.^2 ...     
                                 + radiisTimeDerivative.^2));      
             
-            
+            % Создание графика для наглядности траектории движения спутника в сравнении с окружностью орбиты 
             axes(ax2)
             h2 = polarplot( [0:0.01:2.*pi], ...                             
-                           obj.Rearth.*ones(size([0:0.01:2.*pi])), 'r');   
+                           obj.Rearth .*ones(size([0:0.01:2.*pi])), 'r');   
             ax2 = gca;
             hold(ax2, 'on')
-            h3 = polarplot(ax2, angle, radius, 'b');                       
-        end
+            h3 = polarplot(ax2, angle, radius, 'b')
+            end
+            
 
         function [R, F, dRdt, dFdt] = solve_diff_equation(obj, periodsAmount)
             % Решение разностной схемы для движения спутника по орбите с трением. 
 
             timesteps = [0:obj.tau:periodsAmount.*2.*pi./obj.dFdtic]';     
 
-            R = zeros(numel(timesteps), 1);
-            F = zeros(numel(timesteps), 1);
-            dRdt = zeros(numel(timesteps), 1);
-            dFdt = zeros(numel(timesteps), 1);
+            R = zeros(numel(timesteps), 1);    % Расстояние от центра Земли до спутника
+            F = zeros(numel(timesteps), 1);    % Полярный угол положения спутника в инерциальной СК с центром в центре Земли
+            dRdt = zeros(numel(timesteps), 1);   % Производная радиуса по времени
+            dFdt = zeros(numel(timesteps), 1);   % Производная полярного угла по времени
             
             % 0-ой узел
             R(1) = obj.Hic + obj.Rearth;
@@ -102,11 +104,11 @@ classdef aerodinamicheskiyParadoks < handle
                     
                 Ftr = Ftr_func(dRdt(k), dFdt(k), R(k));
             
-                beta = beta_func(dRdt(k), dFdt(k), R(k));
+                angleBeta = beta_func(dRdt(k), dFdt(k), R(k));
                 
                 % Координаты
-                R(k+1) = 2.*R(k) - R(k-1) + obj.tau.^2.*(R(k).*dFdt(k).^2 - obj.GM./R(k).^2 - Ftr.*sin(beta));
-                F(k+1) = 2.*F(k) - F(k-1) + obj.tau.^2./R(k) .* (-Ftr.*cos(beta) - 2.*dFdt(k).*dRdt(k));
+                R(k+1) = 2.*R(k) - R(k-1) + obj.tau.^2 .*(R(k).*dFdt(k).^2 - obj.GM./R(k).^2 - Ftr.*sin(angleBeta));
+                F(k+1) = 2.*F(k) - F(k-1) + obj.tau.^2 ./R(k) .* (-Ftr.*cos(angleBeta) - 2.*dFdt(k) .*dRdt(k));
             end
             
             % Производные последнего узла
